@@ -1,12 +1,12 @@
 const uuid = require('uuid');
-const userNameGenerator = require('username-generator');
+const usernameGenerator = require('username-generator');
 const generatePassword = require('password-generator');
 
 class User {
   constructor({
     id = uuid(),
     name,
-    login = userNameGenerator.generateUsername(),
+    login = usernameGenerator.generateUsername(),
     password = generatePassword()
   } = {}) {
     this.id = id;
@@ -30,12 +30,9 @@ class User {
     this.password = typeof password === 'undefined' ? this.password : password;
   }
 
-  toResponce() {
-    return {
-      id: this.id,
-      name: this.name,
-      login: this.login
-    };
+  static getResponse(user) {
+    const { id, name, login } = user;
+    return { id, name, login };
   }
 }
 
