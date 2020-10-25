@@ -1,29 +1,17 @@
-const logger = require('./logging');
-const notFoundError = require('./notfounderror');
-const badRequestError = require('./badrequesterror');
+const { INTERNAL_SERVER_ERROR, getStatusText } = require('http-status-codes');
+const logger = require('../common/logging');
 
 const handle = (err, req, res, next) => {
-  if (err instanceof notFoundError || err instanceof badRequestError) {
-    logger.error(`Сode ${err.status}: ${err.shortMsg}`);
-    res.status(err.status).send({ error: err.shortMsg });
-  } else if (err) {
-    logger.error(`Internal Server Error: ${err.stack || err.message}`);
-    res.sendStatus(500);
+  if (err.status) {
+    logger.error(`${err.status}: ${err.message}`);
+    res.status(err.status).send(err.message);
+  } else {
+    logger.error(err.message);
+    res
+      .status(INTERNAL_SERVER_ERROR)
+      .send(getStatusText(INTERNAL_SERVER_ERROR));
   }
-
   next();
 };
-
-process.on('uncaughtException', err => {
-  logger.error(`Uncaught exception: ${err.stack || err.message}`);
-  logger.info('Shutting down');
-  logger.finish(1);
-});
-
-process.on('unhandledRejection', (err, p) => {
-  logger.error(
-    `Unhandled exception: ${err.stack || err.message} at Promise ${p}`
-  );
-});
 
 module.exports = handle;

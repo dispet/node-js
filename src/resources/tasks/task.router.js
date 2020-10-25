@@ -1,47 +1,43 @@
 const router = require('express').Router({ mergeParams: true });
+const { OK, NO_CONTENT } = require('http-status-codes');
 const tasksService = require('./task.service');
-const catchErrors = require('../../common/catchErrors');
+const { taskId, taskBody } = require('../../common/shemas');
+const { toResponse } = require('./task.model');
+const validator = require('../../common/validator');
 
-router.route('/').get(
-  catchErrors(async (req, res) => {
-    const tasks = await tasksService.getBoardTasks(req.params.boardId);
-    res.send(tasks);
-  })
-);
+router.get('/', async (req, res) => {
+  const tasks = await tasksService.getBoardTasks(req.params.id);
+  await res.status(OK).json(tasks.map(toResponse));
+});
 
-router.route('/').post(
-  catchErrors(async (req, res) => {
-    const task = await tasksService.createTask(req.body, req.params.boardId);
-    res.send(task);
-  })
-);
+router.post('/', validator(taskBody, 'body'), async (req, res) => {
+  const task = await tasksService.createTask(req.params.id, req.body);
 
-router.route('/:taskId').get(
-  catchErrors(async (req, res) => {
-    const task = await tasksService.getTask(
-      req.params.boardId,
-      req.params.taskId
-    );
-    res.send(task);
-  })
-);
+  res.status(OK).json(toResponse(task));
+});
 
-router.route('/:taskId').delete(
-  catchErrors(async (req, res) => {
-    await tasksService.deleteTask(req.params.boardId, req.params.taskId);
-    res.sendStatus(204);
-  })
-);
+router.get('/:taskId', validator(taskId, 'params'), async (req, res) => {
+  const task = await tasksService.getTask(req.params.id, req.params.taskId);
+  res.status(OK).json(toResponse(task));
+});
 
-router.route('/:taskId').put(
-  catchErrors(async (req, res) => {
+router.delete('/:taskId', validator(taskId, 'params'), async (req, res) => {
+  await tasksService.deleteTask(req.params.id, req.params.taskId);
+  res.sendStatus(NO_CONTENT);
+});
+
+router.put(
+  '/:taskId',
+  validator(taskId, 'params'),
+  validator(taskBody, 'body'),
+  async (req, res) => {
     const task = await tasksService.updateTask(
-      req.params.boardId,
+      req.params.id,
       req.params.taskId,
       req.body
     );
-    res.send(task);
-  })
+    res.status(OK).json(toResponse(task));
+  }
 );
 
 module.exports = router;

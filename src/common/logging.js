@@ -1,92 +1,81 @@
-const logging = require('winston');
-const onFinished = require('on-finished');
+const { LOGS_DIR, NODE_ENV } = require('./config');
+const winston = require('winston');
+const morgan = require('morgan');
+const { combine, timestamp, prettyPrint } = winston.format;
 require('winston-daily-rotate-file');
 
-const transport = new logging.transports.DailyRotateFile({
-  filename: `${__dirname}/../logs/application-%DATE%.log`,
+morgan.token('body', req =>
+  JSON.stringify(req.body).replace(/,("password":").+"/, '$1***"')
+);
+morgan.token('query', req => JSON.stringify(req.query));
+
+const transport = new winston.transports.DailyRotateFile({
+  filename: `${LOGS_DIR}/application-%DATE%.log`,
   datePattern: 'YYYY-MM-DD',
   zippedArchive: true,
   maxSize: '20m',
   maxFiles: '7d'
 });
 
-const timezoned = () =>
-  new Date().toLocaleString('ru-Ru', {
-    timeZone: 'Europe/Minsk'
-  });
-
+const format = combine(timestamp(), prettyPrint());
 const options = {
-  infoFile: {
+  fileInfo: {
+    format,
     level: 'info',
-    filename: `${__dirname}/../logs/app.log`,
-    handleExceptions: false,
+    filename: `${LOGS_DIR}/app.log`,
+    handleExceptions: true,
+    handleRejections: true,
     json: true,
-    maxsize: 5242880,
-    maxFiles: 1
+    maxsize: 1024 * 5000,
+    maxFiles: 5,
+    colorize: false
   },
-  errorFile: {
+  fileUnhandled: {
+    format,
     level: 'error',
-    filename: `${__dirname}/../logs/err.log`,
-    handleExceptions: false,
+    filename: `${LOGS_DIR}/exceptions.log`,
+    handleExceptions: true,
+    handleRejections: true,
     json: true,
-    maxsize: 5242880,
-    maxFiles: 1
+    maxsize: 1024 * 5000,
+    maxFiles: 5,
+    colorize: false
   },
-  console: {
-    level: 'debug',
-    handleExceptions: false,
-    json: false,
-    colorize: true
+  fileError: {
+    format,
+    level: 'error',
+    filename: `${LOGS_DIR}/errors.log`,
+    json: true,
+    maxsize: 1024 * 5000,
+    maxFiles: 5,
+    colorize: false
   }
 };
 
-const logger = logging.createLogger({
+const logger = winston.createLogger({
   transports: [
-    new logging.transports.File(options.infoFile),
-    new logging.transports.File(options.errorFile),
-    new logging.transports.Console(options.console),
+    new winston.transports.File(options.fileError),
+    new winston.transports.File(options.fileInfo),
     transport
   ],
-  format: logging.format.combine(
-    logging.format.simple(),
-    logging.format.timestamp({
-      format: timezoned
-    }),
-    logging.format.printf(
-      info => `[${info.timestamp}] ${info.level}: ${info.message}`
-    )
-  ),
-  exitOnError: false
+  exceptionHandlers: [new winston.transports.File(options.fileUnhandled)],
+  exitOnError: true
 });
 
-logger.url = (req, res, next) => {
-  const { method, protocol, originalUrl, params, body } = req;
-  if (body.password) body.password = '******';
-  const host = req.headers.host;
-  const start = Date.now();
-  onFinished(res, () => {
-    const ms = Date.now() - start;
-    const { statusCode } = res;
-    logger.info(
-      `method: ${method} url: ${protocol}://${host}${originalUrl}  query: ${JSON.stringify(
-        params
-      )} body: ${JSON.stringify(body)} code: ${statusCode} [${ms} ms]`
-    );
-  });
-
-  next();
-};
-
-logger.finish = exitCode => {
-  /* eslint-disable-next-line */
-  transport.on('finish', () => process.exit(exitCode));
-  transport.close();
-};
+if (NODE_ENV === 'development') {
+  logger.add(
+    new winston.transports.Console({
+      format: winston.format.simple(),
+      level: 'info',
+      handleExceptions: true,
+      handleRejections: true,
+      colorize: true
+    })
+  );
+}
 
 logger.stream = {
-  write(message) {
-    logger.info(message);
-  }
+  write: message => logger.info(message)
 };
 
 module.exports = logger;
