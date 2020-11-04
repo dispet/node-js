@@ -15,8 +15,8 @@ const Board = new Schema(
   { collection: 'boards' }
 );
 
-const toResponse = baord => {
-  const { _id, title, columns } = baord;
+const toResponse = board => {
+  const { _id, title, columns } = board;
   return {
     id: _id,
     title,
